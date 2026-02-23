@@ -2,7 +2,9 @@
 
 ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![pip](https://img.shields.io/badge/pip-3775A9?style=for-the-badge&logo=pypi&logoColor=white)
 ![Google Gemini](https://img.shields.io/badge/Google%20Gemini-8E75B2?style=for-the-badge&logo=google&logoColor=white)
+![WhatsApp API](https://img.shields.io/badge/WhatsApp%20API-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)
 
 ## 📋 Project Overview
 
@@ -22,6 +24,7 @@
 | **Framework**     | FastAPI            |
 | **Language**      | Python 3.10+       |
 | **AI SDK**        | `google-genai`     |
+| **Tunneling**     | `ngrok`            |
 | **Documentation** | Swagger UI / ReDoc |
 
 ## 🏗️ Project Architecture
@@ -38,6 +41,7 @@ SPEECHER/
 │   └── api/                 # Assistant's Skills (Feature modules)
 │       ├── __init__.py
 │       └── speech/          # Speech generation module (Skill 1)
+│       └── speech/          # AI chat (Skill 2)
 ├── .env                     # Environment variables
 └── requirements.txt         # Project dependencies
 ```
@@ -59,6 +63,9 @@ FastAPI automatically generates interactive API documentation based on OpenAPI s
 <li>📦 <strong>pip</strong> - Python package manager</li>
 <li>🔑 <strong>Google API Key</strong> - Active billing account for Gemini 2.0 multimodal features</li>
 </ul>
+<li>💬 <strong>Meta for Developers Account</strong> - Access to WhatsApp Cloud API test numbers</li>
+<li>🌐 <strong>ngrok</strong> - Secure tunneling tool to expose the local webhook</li>
+</ul>
 
 ### Environment Configuration
 
@@ -66,7 +73,14 @@ Create a `.env` file in the root directory:
 
 ```bash
 # AI Provider Configuration
-GEMINI_API_KEY="your_google_api_key_here"
+GEMINI_API_KEY=your_google_api_key_here
+GEMINI_VOICE_MODE_AI=voice_model_ai
+GEMINI_TEXT_MODE_AI=text_model_ai
+
+# Meta / WhatsApp API Configuration
+META_ACCESS_TOKEN=your_temporary_or_permanent_access_token
+META_PHONE_NUMBER_ID=your_phone_number_id
+META_WEBHOOK_VERIFY_TOKEN=your_custom_secure_password
 ```
 
 ### Running the Project
@@ -97,4 +111,12 @@ uvicorn app.main:app --reload
 ```
 
 </li>
+<li> <strong>Expose the local server to the internet (Terminal 2):</strong>
+
+```bash
+ngrok http 8000
+```
+
+<em>Note: Copy the https://...ngrok-free.app URL provided by ngrok and use it in your Meta Developer console with the /webhook/ path appended to register your callback URL.</em>
+
 </ol>

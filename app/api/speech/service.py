@@ -1,3 +1,4 @@
+import os
 import struct
 from google.genai import types
 
@@ -5,6 +6,7 @@ class SpeechService:
     # Recibimos el cliente inyectado en el constructor
     def __init__(self, client):
         self.client = client
+        self.voice_model = os.getenv("GEMINI_VOICE_MODE_AI")
 
     def create_wav_header(self, data_length, sample_rate=24000):
         return struct.pack(
@@ -25,7 +27,7 @@ class SpeechService:
         )
         
         response = self.client.models.generate_content(
-            model="gemini-2.5-pro-preview-tts",
+            model=self.voice_model,
             contents=text,
             config=config
         )

@@ -1,2 +1,22 @@
+__pycache__/
+*.pyc
+.DS_Store
+.idea/
+.vscode/
+*.log
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.pytype/
+.pyre/
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+# Ignore virtual environment directories
+venv/
+env/
 .env
-.venv
+.venv/
