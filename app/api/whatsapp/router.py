@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, Depends, Request, HTTPException, Query
+from fastapi import APIRouter, Depends, Request, HTTPException, Query, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 from app.core.providers import get_gemini_client
 from app.api.whatsapp.service import WhatsAppService
@@ -22,6 +22,7 @@ async def verify_webhook(
 @router.post("/")
 async def receive_message(
     request: Request, 
+    background_tasks: BackgroundTasks,
     client = Depends(get_gemini_client)
 ):
     body = await request.json()
@@ -37,9 +38,15 @@ async def receive_message(
             if message.get("type") == "text":
                 sender_phone = message.get("from")
                 user_text = message.get("text", {}).get("body")
+                message_id = message.get("id")
 
                 service = WhatsAppService(client)
-                await service.process_and_reply(sender_phone, user_text)
+                background_tasks.add_task(
+                    service.process_and_reply, 
+                    sender_phone, 
+                    user_text, 
+                    message_id
+                )
 
         return {"status": "success"}
 

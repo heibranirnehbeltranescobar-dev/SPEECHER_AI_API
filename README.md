@@ -5,6 +5,7 @@
 ![pip](https://img.shields.io/badge/pip-3775A9?style=for-the-badge&logo=pypi&logoColor=white)
 ![Google Gemini](https://img.shields.io/badge/Google%20Gemini-8E75B2?style=for-the-badge&logo=google&logoColor=white)
 ![WhatsApp API](https://img.shields.io/badge/WhatsApp%20API-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)
+![ngrok](https://img.shields.io/badge/ngrok-1F1E37?style=for-the-badge&logo=ngrok&logoColor=white)
 
 ## 📋 Project Overview
 
@@ -36,12 +37,12 @@ SPEECHER/
 ├── app/
 │   ├── main.py              # Root module & application entry point
 │   ├── core/                # Global configurations & shared utilities
-│   │   ├── __init__.py
+│   │   │
 │   │   └── providers.py     # Dependency Injection (e.g., GenAI Client)
 │   └── api/                 # Assistant's Skills (Feature modules)
-│       ├── __init__.py
+│       │
 │       └── speech/          # Speech generation module (Skill 1)
-│       └── speech/          # AI chat (Skill 2)
+│       └── whatsapp/        # AI chat (Skill 2)
 ├── .env                     # Environment variables
 └── requirements.txt         # Project dependencies
 ```
