@@ -68,6 +68,29 @@ FastAPI automatically generates interactive API documentation based on OpenAPI s
 <li>🌐 <strong>ngrok</strong> - Secure tunneling tool to expose the local webhook</li>
 </ul>
 
+## 🤖 AI-Generated Modular Documentation (Skills)
+
+To maintain the project's architecture and seamlessly onboard new AI coding agents or developers, this repository utilizes an automated CLI pipeline to generate modular documentation (often referred to as "Skills").
+Instead of writing static guides, you can generate dynamic, up-to-date documentation directly from the current codebase using Google Gemini and CLI tools.
+
+#### Prerequisites for AI Documentation
+
+Ensure you have the following CLI tools installed in your virtual environment:
+
+```bash
+pip install files-to-prompt llm llm-gemini
+llm keys set gemini # Enter your Google AI Studio API Key when prompted
+```
+
+### Generating the Skills Documentation
+To scan the core application logic (e.g., endpoints, webhook handlers, and AI integrations) and generate a structured Markdown file containing the project's rules, run the following pipeline in your terminal:
+
+```bash
+files-to-prompt app/ main.py | llm -m gemini-1.5-pro "Act as a software architect. I have passed you the source code of my project. Analyze it and generate modular documentation files (AI 'Skills' style). Create a separate Markdown block for each major flow (e.g., how to create new endpoints, how the virtual assistant logic is structured, and how external connections are handled). Document the project rules strictly based on the code you are reading. The resulting documentation must be in English."
+```
+
+This command packages the source code, sends it to Gemini, and generates de markdown on the console.
+
 ### Environment Configuration
 
 Create a `.env` file in the root directory:
