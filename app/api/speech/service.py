@@ -1,6 +1,7 @@
 import os
 import struct
 from google.genai import types
+import subprocess
 
 class SpeechService:
     # Recibimos el cliente inyectado en el constructor
@@ -39,3 +40,29 @@ class SpeechService:
             
         pcm_data = b"".join(audio_chunks)
         return self.create_wav_header(len(pcm_data)) + pcm_data
+
+    def wav_to_opus(self, wav_bytes: bytes) -> bytes:
+            # Converts WAV bytes to OGG Opus bytes using FFmpeg directly.
+            command = [
+                "ffmpeg",
+                "-i", "pipe:0",
+                "-c:a", "libopus",
+                "-f", "ogg",
+                "pipe:1"
+            ]
+            
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            
+            ogg_bytes, stderr_output = process.communicate(input=wav_bytes)
+            
+            if process.returncode != 0:
+                error_msg = stderr_output.decode("utf-8", errors="ignore")
+                print(f"FFmpeg error: {error_msg}")
+                raise Exception("Failed to convert WAV to OGG Opus via FFmpeg.")
+                
+            return ogg_bytes
