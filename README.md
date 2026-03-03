@@ -5,6 +5,7 @@
 ![pip](https://img.shields.io/badge/pip-3775A9?style=for-the-badge&logo=pypi&logoColor=white)
 ![Google Gemini](https://img.shields.io/badge/Google%20Gemini-8E75B2?style=for-the-badge&logo=google&logoColor=white)
 ![WhatsApp API](https://img.shields.io/badge/WhatsApp%20API-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)
+![FFmpeg](https://img.shields.io/badge/FFmpeg-007800?style=for-the-badge&logo=ffmpeg&logoColor=white)
 ![ngrok](https://img.shields.io/badge/ngrok-1F1E37?style=for-the-badge&logo=ngrok&logoColor=white)
 
 ## 📋 Project Overview
@@ -15,18 +16,22 @@
 
 - **Scalable AI Brain**: A modular foundation built to easily integrate future capabilities (e.g., Vision, NLP, Contextual Memory).
 - **RESTful Architecture**: Fully compliant REST API with proper HTTP methods, status codes, and strict JSON payloads.
-- **Native AI Audio Generation (Module v1)**: Direct integration with Google Gemini's multimodal capabilities for high-fidelity audio streams.
-- **In-Memory Processing**: Streams and packages `.wav` files directly into HTTP responses for zero-latency interactions.
+- **Multimodal Conversational Flow**: Automatically detects if a user sends a text message or a voice note via WhatsApp.
+- **Advanced Speech-to-Text (STT)**: Transcribes incoming WhatsApp audio notes using Gemini 1.5 Flash, supporting multiple languages within the same audio.
+- **Native AI Voice Generation (TTS)**: Converts AI text responses into high-fidelity audio streams using Gemini’s multimodal capabilities.
+- **In-Memory Audio Processing**: Utilizes **FFmpeg** to normalize incoming audio (16kHz mono) and encode outgoing responses to `.ogg` (Opus) for native WhatsApp compatibility without disk latency.
+- **Intent Analysis**: Uses AI to determine if the user is implicitly or explicitly asking for a voice response, adapting the output format dynamically.
 
 ## 🛠️ Technology Stack
 
-| Component         | Technology         |
-| ----------------- | ------------------ |
-| **Framework**     | FastAPI            |
-| **Language**      | Python 3.10+       |
-| **AI SDK**        | `google-genai`     |
-| **Tunneling**     | `ngrok`            |
-| **Documentation** | Swagger UI / ReDoc |
+| Component            | Technology                |
+| -------------------- | ------------------------- |
+| **Framework**        | FastAPI                   |
+| **Language**         | Python 3.10+              |
+| **AI SDK**           | `google-genai`            |
+| **Tunneling**        | `ngrok`                   |
+| **Audio Processing** | `FFmpeg` (via Subprocess) |
+| **Documentation**    | Swagger UI / ReDoc        |
 
 ## 🏗️ Project Architecture
 
@@ -66,6 +71,7 @@ FastAPI automatically generates interactive API documentation based on OpenAPI s
 </ul>
 <li>💬 <strong>Meta for Developers Account</strong> - Access to WhatsApp Cloud API test numbers</li>
 <li>🌐 <strong>ngrok</strong> - Secure tunneling tool to expose the local webhook</li>
+<li>🔊 <strong>FFmpeg</strong> - Installed and added to the system PATH.</li>
 </ul>
 
 ## 🤖 AI-Generated Modular Documentation (Skills)
@@ -83,6 +89,7 @@ llm keys set gemini # Enter your Google AI Studio API Key when prompted
 ```
 
 ### Generating the Skills Documentation
+
 To scan the core application logic (e.g., endpoints, webhook handlers, and AI integrations) and generate a structured Markdown file containing the project's rules, run the following pipeline in your terminal:
 
 ```bash

@@ -58,6 +58,25 @@ class WhatsAppService:
             print(f"Intent classification error: {e}")
             return False
 
+    async def get_media_url(self, media_id: str) -> str:
+        # Obtiene la URL de descarga del archivo desde la API de Meta.
+        url = f"https://graph.facebook.com/v22.0/{media_id}"
+        headers = {"Authorization": f"Bearer {self.wa_token}"}
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code != 200:
+                raise Exception(f"Error obteniendo URL de media: {resp.text}")
+            return resp.json().get("url")
+
+    async def download_media(self, media_url: str) -> bytes:
+        # Descarga los bytes binarios del audio.
+        headers = {"Authorization": f"Bearer {self.wa_token}"}
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(media_url, headers=headers)
+            if resp.status_code != 200:
+                raise Exception("Error descargando archivo de audio")
+            return resp.content
+
     def generate_text_reply(self, user_text: str, is_audio_requested: bool) -> str:
         prompt_context = (
             "You are a virtual assistant for WhatsApp, specialized in technical support. "
@@ -83,7 +102,7 @@ class WhatsAppService:
         url = f"https://graph.facebook.com/v22.0/{self.wa_phone_id}/media"
         headers = {"Authorization": f"Bearer {self.wa_token}"}
         data = {"messaging_product": "whatsapp"}
-        files = {"file": ("response.wav", audio_bytes, "audio/wav")}
+        files = {"file": ("audio.ogg", audio_bytes, "audio/ogg")}
 
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=headers, data=data, files=files)
@@ -132,9 +151,34 @@ class WhatsAppService:
         }
         await self.send_request(payload)
 
+    async def process_audio_and_reply(self, sender_phone: str, audio_id: str, message_id: str):
+        # Flujo para mensajes de voz: Descarga -> Transcribe -> Procesa respuesta.
+        try:
+            # 1. Obtener y descargar audio
+            url = await self.get_media_url(audio_id)
+            audio_bytes = await self.download_media(url)
+
+            # 2. Transcribir (STT) usando SpeechService
+            print("Transcribiendo audio entrante...")
+            transcription = self.speech_service.audio_to_text(audio_bytes)
+            
+            if not transcription:
+                raise Exception("No se pudo obtener la transcripción del audio.")
+            
+            print(f"Transcripción exitosa: {transcription}")
+
+            # 3. Seguir el flujo normal de análisis y respuesta
+            await self.process_and_reply(sender_phone, transcription, message_id)
+
+        except Exception as e:
+            print(f"Error en el flujo de audio: {e}")
+            await self.send_fallback_message(sender_phone, message_id)
+
     async def process_and_reply(self, sender_phone: str, user_text: str, message_id: str):
         try:
-            is_audio_requested = self.wants_audio(user_text)
+            print('Analizing: '+user_text)
+            is_audio_requested: bool = self.wants_audio(user_text)
+            print(['Analized, is audio: ', is_audio_requested])
             await self.send_typing_indicator(message_id)
 
             ai_reply = self.generate_text_reply(user_text, is_audio_requested)

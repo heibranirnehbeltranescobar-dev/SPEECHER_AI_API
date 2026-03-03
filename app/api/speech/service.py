@@ -2,12 +2,14 @@ import os
 import struct
 from google.genai import types
 import subprocess
+from app.api.speech.schemas import TranscriptionResponse
 
 class SpeechService:
     # Recibimos el cliente inyectado en el constructor
     def __init__(self, client):
         self.client = client
         self.voice_model = os.getenv("GEMINI_VOICE_MODE_AI")
+        self.text_model = os.getenv("GEMINI_TEXT_MODE_AI")
 
     def create_wav_header(self, data_length, sample_rate=24000):
         return struct.pack(
@@ -41,13 +43,59 @@ class SpeechService:
         pcm_data = b"".join(audio_chunks)
         return self.create_wav_header(len(pcm_data)) + pcm_data
 
+    def audio_to_text(self, audio_bytes: bytes) -> str:
+
+        # Converts audio bytes to text using FFmpeg for normalization 
+        # and Gemini for Speech-to-Text in English.
+
+        try:
+            # Normalize audio to WAV 16kHz mono using FFmpeg (in-memory)
+            command = [
+                "ffmpeg",
+                "-i", "pipe:0",        # Input from stdin
+                "-ar", "16000",        # sample rate
+                "-ac", "1",            # mono
+                "-f", "wav",           # format
+                "pipe:1"               # Output to stdout
+            ]
+            
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            
+            wav_data, stderr = process.communicate(input=audio_bytes)
+            
+            if process.returncode != 0:
+                print(f"FFmpeg STT Error: {stderr.decode()}")
+                return None
+
+            # Send to Gemini for transcription
+            response = self.client.models.generate_content(
+                model=self.text_model,
+                contents=[
+                    "Transcribe this audio accurately to text in the language o languages the person is speaking in the audio.",
+                    types.Part.from_bytes(data=wav_data, mime_type="audio/wav")
+                ]
+            )
+            
+            return response.text.strip()
+            
+        except Exception as e:
+            print(f"STT Processing Error: {e}")
+            return None
+
     def wav_to_opus(self, wav_bytes: bytes) -> bytes:
             # Converts WAV bytes to OGG Opus bytes using FFmpeg directly.
             command = [
                 "ffmpeg",
                 "-i", "pipe:0",
                 "-c:a", "libopus",
-                "-f", "ogg",
+                "-b:a", "64k",
+                "-vbr", "on",
+                "-f", "opus",
                 "pipe:1"
             ]
             

@@ -35,17 +35,24 @@ async def receive_message(
 
         if messages:
             message = messages[0]
-            if message.get("type") == "text":
-                sender_phone = message.get("from")
-                user_text = message.get("text", {}).get("body")
-                message_id = message.get("id")
+            sender_phone = message.get("from")
+            message_id = message.get("id")
+            service = WhatsAppService(client)
 
-                service = WhatsAppService(client)
+            # CASO 1: El usuario envía TEXTO
+            if message.get("type") == "text":
+                user_text = message.get("text", {}).get("body")
                 background_tasks.add_task(
                     service.process_and_reply, 
-                    sender_phone, 
-                    user_text, 
-                    message_id
+                    sender_phone, user_text, message_id
+                )
+
+            # CASO 2: El usuario envía AUDIO (Mensaje de voz)
+            elif message.get("type") == "audio":
+                audio_id = message.get("audio", {}).get("id")
+                background_tasks.add_task(
+                    service.process_audio_and_reply, 
+                    sender_phone, audio_id, message_id
                 )
 
         return {"status": "success"}
