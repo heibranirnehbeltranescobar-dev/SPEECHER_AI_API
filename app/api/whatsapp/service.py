@@ -1,22 +1,23 @@
 import os
 import httpx
 from google import genai
-from google.genai import types
-from app.api.speech.service import SpeechService
+
+# Import the new orchestrator
+from app.agent.orchestrator import AgentOrchestrator
 
 class WhatsAppService:
     def __init__(self, ai_client: genai.Client):
         self.ai_client = ai_client
         self.wa_token = os.getenv("META_ACCESS_TOKEN")
         self.wa_phone_id = os.getenv("META_PHONE_NUMBER_ID")
-        self.text_model = os.getenv("GEMINI_TEXT_MODE_AI")
-        self.speech_service = SpeechService(ai_client)
-
+        
         self.messages_url = f"https://graph.facebook.com/v22.0/{self.wa_phone_id}/messages"
         self.base_headers = {
             "Authorization": f"Bearer {self.wa_token}",
             "Content-Type": "application/json"
         }
+        
+        self.agent = AgentOrchestrator(ai_client)
 
     async def send_request(self, payload: dict) -> httpx.Response:
         async with httpx.AsyncClient() as client:
@@ -38,28 +39,8 @@ class WhatsAppService:
         }
         await self.send_request(payload)
 
-    def wants_audio(self, user_text: str) -> bool:
-        config = types.GenerateContentConfig(
-            system_instruction=(
-                "Analyze the user's message and determine if they are explicitly "
-                "or implicitly asking for a voice message or audio response. "
-                "Reply STRICTLY with 'yes' or 'no'. No punctuation or additional text."
-            ),
-            temperature=0.0
-        )
-        try:
-            response = self.ai_client.models.generate_content(
-                model=self.text_model,
-                contents=user_text,
-                config=config
-            )
-            return response.text.strip().lower() == "yes"
-        except Exception as e:
-            print(f"Intent classification error: {e}")
-            return False
-
     async def get_media_url(self, media_id: str) -> str:
-        # Obtiene la URL de descarga del archivo desde la API de Meta.
+        # Gets the download URL for the media file from Meta API.
         url = f"https://graph.facebook.com/v22.0/{media_id}"
         headers = {"Authorization": f"Bearer {self.wa_token}"}
         async with httpx.AsyncClient() as client:
@@ -69,7 +50,7 @@ class WhatsAppService:
             return resp.json().get("url")
 
     async def download_media(self, media_url: str) -> bytes:
-        # Descarga los bytes binarios del audio.
+        # Downloads the binary bytes of the audio file.
         headers = {"Authorization": f"Bearer {self.wa_token}"}
         async with httpx.AsyncClient() as client:
             resp = await client.get(media_url, headers=headers)
@@ -77,28 +58,8 @@ class WhatsAppService:
                 raise Exception("Error descargando archivo de audio")
             return resp.content
 
-    def generate_text_reply(self, user_text: str, is_audio_requested: bool) -> str:
-        prompt_context = (
-            "You are a virtual assistant for WhatsApp, specialized in technical support. "
-            "Your answers must be direct, concise, and efficient, with an analytical yet empathetic tone. "
-            "Use technical terminology occasionally."
-        )
-
-        if is_audio_requested:
-            prompt_context += (
-                " IMPORTANT: Your response will be read aloud by a TTS system. "
-                "Respond naturally, conversationally, using full words and NO asterisks, emojis, hashtags, or bullet points."
-            )
-
-        config = types.GenerateContentConfig(system_instruction=prompt_context)
-        response = self.ai_client.models.generate_content(
-            model=self.text_model,
-            contents=user_text,
-            config=config
-        )
-        return response.text
-
     async def upload_audio_to_meta(self, audio_bytes: bytes) -> str:
+        # Uploads the generated audio back to Meta's servers
         url = f"https://graph.facebook.com/v22.0/{self.wa_phone_id}/media"
         headers = {"Authorization": f"Bearer {self.wa_token}"}
         data = {"messaging_product": "whatsapp"}
@@ -111,17 +72,7 @@ class WhatsAppService:
                 return media_id
             raise Exception(f"Failed to upload audio to Meta: {response.text}")
 
-    async def build_audio_payload(self, sender_phone: str, message_id: str, ai_reply: str) -> dict:
-
-        wav_bytes = self.speech_service.text_to_audio(ai_reply)
-        if not wav_bytes:
-            raise Exception("Audio generation failed.")
-
-        # 2. Convertir a OGG usando nuestra nueva función
-        ogg_bytes = self.speech_service.wav_to_opus(wav_bytes)
-
-        media_id = await self.upload_audio_to_meta(ogg_bytes)
-        
+    def build_audio_payload(self, sender_phone: str, message_id: str, media_id: str) -> dict:
         return {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
@@ -147,51 +98,64 @@ class WhatsAppService:
             "to": sender_phone,
             "type": "text",
             "context": {"message_id": message_id},
-            "text": {"body": "Lo siento, tengo problemas para cumplir con lo solicitado :c"}
+            "text": {"body": "Lo siento, tuve un problema técnico al procesar tu solicitud."}
         }
         await self.send_request(payload)
 
     async def process_audio_and_reply(self, sender_phone: str, audio_id: str, message_id: str):
-        # Flujo para mensajes de voz: Descarga -> Transcribe -> Procesa respuesta.
+        """ Flow for incoming Voice Notes: Download -> Delegate to Agent -> Send Media/Text """
         try:
-            # 1. Obtener y descargar audio
-            url = await self.get_media_url(audio_id)
-            audio_bytes = await self.download_media(url)
-
-            # 2. Transcribir (STT) usando SpeechService
-            print("Transcribiendo audio entrante...")
-            transcription = self.speech_service.audio_to_text(audio_bytes)
-            
-            if not transcription:
-                raise Exception("No se pudo obtener la transcripción del audio.")
-            
-            print(f"Transcripción exitosa: {transcription}")
-
-            # 3. Seguir el flujo normal de análisis y respuesta
-            await self.process_and_reply(sender_phone, transcription, message_id)
-
-        except Exception as e:
-            print(f"Error en el flujo de audio: {e}")
-            await self.send_fallback_message(sender_phone, message_id)
-
-    async def process_and_reply(self, sender_phone: str, user_text: str, message_id: str):
-        try:
-            print('Analizing: '+user_text)
-            is_audio_requested: bool = self.wants_audio(user_text)
-            print(['Analized, is audio: ', is_audio_requested])
             await self.send_typing_indicator(message_id)
 
-            ai_reply = self.generate_text_reply(user_text, is_audio_requested)
+            # 1. Fetch raw OGG bytes from Meta
+            url = await self.get_media_url(audio_id)
+            audio_bytes = await self.download_media(url)
+            
+            print("🔊 [WhatsAppService] Audio downloaded, passing directly to Agent...")
 
-            if is_audio_requested:
-                payload = await self.build_audio_payload(sender_phone, message_id, ai_reply)
+            # 2. Delegate entire logic to Orchestrator
+            agent_response = await self.agent.process_interaction(input_data=audio_bytes, is_audio=True)
+
+            # 3. Route response based on what the Agent returned (Dynamic formatting)
+            if agent_response["type"] == "audio":
+                print("🔊 [WhatsAppService] Agent chose Audio. Uploading to Meta...")
+                media_id = await self.upload_audio_to_meta(agent_response["data"])
+                payload = self.build_audio_payload(sender_phone, message_id, media_id)
             else:
-                payload = self.build_text_payload(sender_phone, message_id, ai_reply)
+                print("📝 [WhatsAppService] Agent chose Text override.")
+                payload = self.build_text_payload(sender_phone, message_id, agent_response["data"])
 
             response = await self.send_request(payload)
             if response.status_code in [200, 201]:
-                print("Response sent to WhatsApp successfully.")
+                print("✅ [WhatsAppService] Audio flow response sent successfully.")
 
         except Exception as e:
-            print(f"Processing flow error: {e}")
+            print(f"❌ [WhatsAppService] Error in audio flow: {e}")
+            await self.send_fallback_message(sender_phone, message_id)
+
+    async def process_and_reply(self, sender_phone: str, user_text: str, message_id: str):
+        """ Flow for incoming Text Messages: Delegate to Agent -> Send Text/Media """
+        try:
+            print(f"💬 [WhatsAppService] Analyzing text: {user_text}")
+            await self.send_typing_indicator(message_id)
+
+            # 1. Delegate text to the Orchestrator
+            agent_response = await self.agent.process_interaction(input_data=user_text, is_audio=False)
+
+            # 2. Check the format the Agent decided to output (Dynamic formatting)
+            if agent_response["type"] == "audio":
+                print("🔊 [WhatsAppService] Agent chose Audio for Text input. Uploading to Meta...")
+                media_id = await self.upload_audio_to_meta(agent_response["data"])
+                payload = self.build_audio_payload(sender_phone, message_id, media_id)
+            else:
+                print("📝 [WhatsAppService] Agent chose Text output.")
+                payload = self.build_text_payload(sender_phone, message_id, agent_response["data"])
+            
+            # 3. Send the response to WhatsApp
+            response = await self.send_request(payload)
+            if response.status_code in [200, 201]:
+                print("✅ [WhatsAppService] Text flow response sent successfully.")
+
+        except Exception as e:
+            print(f"❌ [WhatsAppService] Error in text flow: {e}")
             await self.send_fallback_message(sender_phone, message_id)

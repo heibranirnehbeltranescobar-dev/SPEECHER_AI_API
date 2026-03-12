@@ -60,6 +60,7 @@ FastAPI automatically generates interactive API documentation based on OpenAPI s
 <li> <strong>Swagger UI:</strong> Navigate to http://127.0.0.1:8000/docs for an interactive, graphical interface where you can execute requests and test payload structures.</li>
 <li> <strong>ReDoc:</strong> Navigate to http://127.0.0.1:8000/redoc for a more detailed, linear documentation format.</li>
 </ul>
+
 ## 🚀 Installation & Setup
 
 ### Prerequisites
