@@ -43,7 +43,7 @@ async def receive_message(
             if message.get("type") == "text":
                 user_text = message.get("text", {}).get("body")
                 background_tasks.add_task(
-                    service.process_and_reply, 
+                    service.process_text_and_reply, 
                     sender_phone, user_text, message_id
                 )
 

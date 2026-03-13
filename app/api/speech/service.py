@@ -8,8 +8,8 @@ class SpeechService:
     # Recibimos el cliente inyectado en el constructor
     def __init__(self, client):
         self.client = client
-        self.voice_model = os.getenv("GEMINI_VOICE_MODE_AI")
-        self.text_model = os.getenv("GEMINI_TEXT_MODE_AI")
+        self.voice_model = os.getenv("GEMINI_VOICE_MODEL_AI")
+        self.text_model = os.getenv("GEMINI_TEXT_MODEL_AI")
 
     def create_wav_header(self, data_length, sample_rate=24000):
         return struct.pack(

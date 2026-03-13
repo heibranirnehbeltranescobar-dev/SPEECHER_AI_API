@@ -1,9 +1,10 @@
 import os
 import httpx
+import asyncio
 from google import genai
 
 # Import the new orchestrator
-from app.agent.orchestrator import AgentOrchestrator
+from app.core.agent.orchestrator import AgentOrchestrator
 
 class WhatsAppService:
     def __init__(self, ai_client: genai.Client):
@@ -38,6 +39,14 @@ class WhatsAppService:
             "typing_indicator": {"type": "text"}
         }
         await self.send_request(payload)
+
+    async def _typing_loop(self, message_id: str):
+        try:
+            while True:
+                await self.send_typing_indicator(message_id)
+                await asyncio.sleep(8)
+        except asyncio.CancelledError:
+            pass
 
     async def get_media_url(self, media_id: str) -> str:
         # Gets the download URL for the media file from Meta API.
@@ -78,7 +87,9 @@ class WhatsAppService:
             "recipient_type": "individual",
             "to": sender_phone,
             "type": "audio",
-            "context": {"message_id": message_id},
+            "context": {
+                "message_id": message_id
+            },
             "audio": {"id": media_id}
         }
 
@@ -88,7 +99,9 @@ class WhatsAppService:
             "recipient_type": "individual",
             "to": sender_phone,
             "type": "text",
-            "context": {"message_id": message_id},
+            "context": {
+                "message_id": message_id
+            },
             "text": {"body": ai_reply}
         }
 
@@ -98,14 +111,15 @@ class WhatsAppService:
             "to": sender_phone,
             "type": "text",
             "context": {"message_id": message_id},
-            "text": {"body": "Lo siento, tuve un problema técnico al procesar tu solicitud."}
+            "text": {"body": "Lo siento, tuve un problema técnico al procesar tu solicitud :c"}
         }
         await self.send_request(payload)
 
     async def process_audio_and_reply(self, sender_phone: str, audio_id: str, message_id: str):
         """ Flow for incoming Voice Notes: Download -> Delegate to Agent -> Send Media/Text """
+        typing_task = None
         try:
-            await self.send_typing_indicator(message_id)
+            typing_task = asyncio.create_task(self._typing_loop(message_id))
 
             # 1. Fetch raw OGG bytes from Meta
             url = await self.get_media_url(audio_id)
@@ -116,33 +130,34 @@ class WhatsAppService:
             # 2. Delegate entire logic to Orchestrator
             agent_response = await self.agent.process_interaction(input_data=audio_bytes, is_audio=True)
 
-            # 3. Route response based on what the Agent returned (Dynamic formatting)
-            if agent_response["type"] == "audio":
-                print("🔊 [WhatsAppService] Agent chose Audio. Uploading to Meta...")
-                media_id = await self.upload_audio_to_meta(agent_response["data"])
-                payload = self.build_audio_payload(sender_phone, message_id, media_id)
-            else:
-                print("📝 [WhatsAppService] Agent chose Text override.")
-                payload = self.build_text_payload(sender_phone, message_id, agent_response["data"])
-
-            response = await self.send_request(payload)
-            if response.status_code in [200, 201]:
-                print("✅ [WhatsAppService] Audio flow response sent successfully.")
+            await self.process_and_reply(sender_phone, message_id, agent_response, typing_task)
 
         except Exception as e:
+            if typing_task:
+                typing_task.cancel()
             print(f"❌ [WhatsAppService] Error in audio flow: {e}")
             await self.send_fallback_message(sender_phone, message_id)
 
-    async def process_and_reply(self, sender_phone: str, user_text: str, message_id: str):
+    async def process_text_and_reply(self, sender_phone: str, user_text: str, message_id: str):
         """ Flow for incoming Text Messages: Delegate to Agent -> Send Text/Media """
+        typing_task = None
         try:
             print(f"💬 [WhatsAppService] Analyzing text: {user_text}")
-            await self.send_typing_indicator(message_id)
+            typing_task = asyncio.create_task(self._typing_loop(message_id))
 
             # 1. Delegate text to the Orchestrator
             agent_response = await self.agent.process_interaction(input_data=user_text, is_audio=False)
 
-            # 2. Check the format the Agent decided to output (Dynamic formatting)
+            await self.process_and_reply(sender_phone, message_id, agent_response, typing_task)
+
+        except Exception as e:
+            if typing_task:
+                typing_task.cancel()
+            print(f"❌ [WhatsAppService] Error in text flow: {e}")
+            await self.send_fallback_message(sender_phone, message_id)
+
+    async def process_and_reply(self, sender_phone: str, message_id: str, agent_response: dict, typing_task):
+        # 2. Check the format the Agent decided to output (Dynamic formatting)
             if agent_response["type"] == "audio":
                 print("🔊 [WhatsAppService] Agent chose Audio for Text input. Uploading to Meta...")
                 media_id = await self.upload_audio_to_meta(agent_response["data"])
@@ -150,12 +165,10 @@ class WhatsAppService:
             else:
                 print("📝 [WhatsAppService] Agent chose Text output.")
                 payload = self.build_text_payload(sender_phone, message_id, agent_response["data"])
-            
+
             # 3. Send the response to WhatsApp
             response = await self.send_request(payload)
             if response.status_code in [200, 201]:
-                print("✅ [WhatsAppService] Text flow response sent successfully.")
-
-        except Exception as e:
-            print(f"❌ [WhatsAppService] Error in text flow: {e}")
-            await self.send_fallback_message(sender_phone, message_id)
+                if typing_task:
+                    typing_task.cancel()
+                print("✅ [WhatsAppService] Response sent successfully.")

@@ -106,8 +106,8 @@ Create a `.env` file in the root directory:
 ```bash
 # AI Provider Configuration
 GEMINI_API_KEY=your_google_api_key_here
-GEMINI_VOICE_MODE_AI=voice_model_ai
-GEMINI_TEXT_MODE_AI=text_model_ai
+GEMINI_VOICE_MODEL_AI=voice_model_ai
+GEMINI_TEXT_MODEL_AI=text_model_ai
 
 # Meta / WhatsApp API Configuration
 META_ACCESS_TOKEN=your_temporary_or_permanent_access_token

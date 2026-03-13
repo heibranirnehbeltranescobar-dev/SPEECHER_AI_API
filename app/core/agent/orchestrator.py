@@ -2,17 +2,17 @@ import os
 from google import genai
 from google.genai import types
 
-from app.agent.skills.git_support.schemas import git_skill_declaration
-from app.agent.skills.quality_standards.schemas import iso_skill_declaration
-from app.agent.skills.git_support.actions import get_git_guide
-from app.agent.skills.quality_standards.actions import get_quality_standard
+from app.core.agent.skills.git_support.schemas import git_skill_declaration
+from app.core.agent.skills.quality_standards.schemas import iso_skill_declaration
+from app.core.agent.skills.git_support.actions import get_git_guide
+from app.core.agent.skills.quality_standards.actions import get_quality_standard
 from app.api.speech.service import SpeechService
 
 class AgentOrchestrator:
     def __init__(self, ai_client: genai.Client):
         self.ai_client = ai_client
-        self.text_model = os.getenv("GEMINI_TEXT_MODE_AI", "gemini-2.0-flash")
-        self.voice_model = os.getenv("GEMINI_VOICE_MODE_AI", "models/gemini-2.5-pro-preview-tts")
+        self.text_model = os.getenv("GEMINI_TEXT_MODEL_AI")
+        self.voice_model = os.getenv("GEMINI_VOICE_MODEL_AI")
         self.speech_service = SpeechService(ai_client)
         
         self.tools = [types.Tool(function_declarations=[git_skill_declaration, iso_skill_declaration])]
@@ -57,32 +57,43 @@ class AgentOrchestrator:
             temperature=0.3
         )
 
+        chat_contents = [user_content]
+
         response = self.ai_client.models.generate_content(
             model=self.text_model,
             contents=[user_content],
             config=config
         )
 
+        max_iterations = 10 # Límite de seguridad para que no investigue infinitamente
+        iterations = 0
+
         # 3. Handle Tool Calls
-        if response.function_calls:
+        while response.function_calls and iterations < max_iterations:
             function_call = response.function_calls[0]
             action_name = function_call.name
             action_args = function_call.args
-            print(f"🛠️ [Agent] Executing tool: {action_name}")
+            print(f"🛠️ [Agent] Executing tool: {action_name} | Args: {action_args}")
 
             if action_name in self.action_mapping:
                 action_result = self.action_mapping[action_name](**action_args)
                 
-                # Le pasamos response.candidates[0].content para conservar su "thought_signature"
+                # 1. Guardamos la petición de la herramienta (mantiene el thought_signature)
+                chat_contents.append(response.candidates[0].content)
+                
+                # 2. Guardamos la respuesta de nuestra función con los datos
+                chat_contents.append(
+                    types.Content(role="user", parts=[types.Part.from_function_response(name=action_name, response={"result": action_result})])
+                )
+                
+                # 3. La IA vuelve a pensar con el historial actualizado
                 response = self.ai_client.models.generate_content(
                     model=self.text_model,
-                    contents=[
-                        user_content,
-                        response.candidates[0].content, 
-                        types.Content(role="user", parts=[types.Part.from_function_response(name=action_name, response={"result": action_result})])
-                    ],
+                    contents=chat_contents,
                     config=config
                 )
+            
+            iterations += 1
 
         # Extracción segura de texto (Salvavidas)
         try:
