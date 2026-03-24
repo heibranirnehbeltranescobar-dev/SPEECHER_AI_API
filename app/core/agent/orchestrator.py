@@ -65,6 +65,15 @@ class AgentOrchestrator:
             config=config
         )
 
+        metadata = response.usage_metadata
+        if metadata:
+            print(f"\n---------------Texto----------------------")
+            #print(metadata)
+            print(f"Input Tokens: {metadata.prompt_token_count}")
+            print(f"Output Tokens: {metadata.candidates_token_count}")
+            print(f"\nTotal Tokens: {metadata.total_token_count}")
+            print(f"-------------------------------------\n")
+
         max_iterations = 10 # Límite de seguridad para que no investigue infinitamente
         iterations = 0
 

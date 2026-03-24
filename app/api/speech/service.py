@@ -34,7 +34,15 @@ class SpeechService:
             contents=text,
             config=config
         )
-        
+
+        metadata = response.usage_metadata
+        if metadata:
+            print(f"\n---------------AUDIO----------------------")
+            print(f"Input Tokens: {metadata.prompt_token_count}")
+            print(f"Output Tokens: {metadata.candidates_token_count}")
+            print(f"\nTotal Tokens: {metadata.total_token_count}")
+            print(f"-------------------------------------\n")
+
         audio_chunks = [part.inline_data.data for part in response.candidates[0].content.parts if part.inline_data]
         
         if not audio_chunks:

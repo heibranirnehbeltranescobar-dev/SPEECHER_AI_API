@@ -29,6 +29,11 @@ llm==0.28
 llm-gemini==0.29
 multidict==6.7.1
 openai==2.24.0
+orjson==3.11.7
+packaging==24.2
+pinecone==8.1.0
+pinecone-plugin-assistant==3.0.2
+pinecone-plugin-interface==0.0.7
 pluggy==1.6.0
 propcache==0.4.1
 puremagic==2.0.0
