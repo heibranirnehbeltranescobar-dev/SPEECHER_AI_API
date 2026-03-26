@@ -3,8 +3,8 @@ import httpx
 import asyncio
 from google import genai
 
-# Import the new orchestrator
 from app.core.agent.orchestrator import AgentOrchestrator
+from app.core.services.ai import AIService
 
 class WhatsAppService:
     def __init__(self, ai_client: genai.Client):
@@ -18,7 +18,7 @@ class WhatsAppService:
             "Content-Type": "application/json"
         }
         
-        self.agent = AgentOrchestrator(ai_client)
+        self.agent = AgentOrchestrator(AIService(self.ai_client))
 
     async def send_request(self, payload: dict) -> httpx.Response:
         async with httpx.AsyncClient() as client:

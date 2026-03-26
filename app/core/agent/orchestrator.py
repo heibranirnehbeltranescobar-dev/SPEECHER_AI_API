@@ -1,27 +1,32 @@
 import os
-from google import genai
 from google.genai import types
 
 from app.core.agent.skills.git_support.schemas import git_skill_declaration
 from app.core.agent.skills.quality_standards.schemas import iso_skill_declaration
+from app.core.agent.skills.internal_knowledge.schemas import knowledge_skill_declaration
+
 from app.core.agent.skills.git_support.actions import get_git_guide
 from app.core.agent.skills.quality_standards.actions import get_quality_standard
-from app.api.speech.service import SpeechService
+from app.core.agent.skills.internal_knowledge.actions import search_internal_knowledge
+
+from app.core.services.ai import AIService
 
 class AgentOrchestrator:
-    def __init__(self, ai_client: genai.Client):
-        self.ai_client = ai_client
-        self.text_model = os.getenv("GEMINI_TEXT_MODEL_AI")
-        self.voice_model = os.getenv("GEMINI_VOICE_MODEL_AI")
-        self.speech_service = SpeechService(ai_client)
+
+    def __init__(self, ai_service: AIService):
+        self.ai_service = ai_service 
         
-        self.tools = [types.Tool(function_declarations=[git_skill_declaration, iso_skill_declaration])]
+        self.tools = [types.Tool(function_declarations=[
+
+            git_skill_declaration, iso_skill_declaration, knowledge_skill_declaration
+
+        ])]
         self.action_mapping = {
             "get_git_guide": get_git_guide,
-            "get_quality_standard": get_quality_standard
+            "get_quality_standard": get_quality_standard,
+            "search_internal_knowledge": search_internal_knowledge
         }
 
-        # UPDATE: New routing rules for the AI
         self.system_instruction = (
             "Eres el asistente virtual oficial de soporte para estudiantes de ingeniería. "
             "Resuelve dudas usando las herramientas proporcionadas. "
@@ -36,21 +41,22 @@ class AgentOrchestrator:
     async def process_interaction(self, input_data: str | bytes, is_audio: bool = False) -> dict:
         print(f"🤖 [Agent] Processing interaction. Input is Audio? {is_audio}")
 
-        # 1. Prepare Content
         if is_audio:
+
+            print("🎙️ [Agent] Transcribing incoming audio...")
+            transcribed_text = self.ai_service.audio_to_text(input_data)
+            if not transcribed_text:
+                return {"type": "text", "data": "Lo siento, no pude entender el audio."}
+            
+            print(f"🗣️ [Agent] User said: {transcribed_text}")
             user_content = types.Content(
-                role="user", 
-                parts=[
-                    types.Part.from_text(text="Please listen to this student's audio message:"),
-                    types.Part.from_bytes(data=input_data, mime_type="audio/ogg")
-                ]
+                role="user", parts=[types.Part.from_text(text=transcribed_text)]
             )
         else:
             user_content = types.Content(
                 role="user", parts=[types.Part.from_text(text=input_data)]
             )
 
-        # 2. Config & Call
         config = types.GenerateContentConfig(
             tools=self.tools,
             system_instruction=self.system_instruction,
@@ -59,25 +65,11 @@ class AgentOrchestrator:
 
         chat_contents = [user_content]
 
-        response = self.ai_client.models.generate_content(
-            model=self.text_model,
-            contents=[user_content],
-            config=config
-        )
+        response = self.ai_service.generate_text_response(chat_contents, config)
 
-        metadata = response.usage_metadata
-        if metadata:
-            print(f"\n---------------Texto----------------------")
-            #print(metadata)
-            print(f"Input Tokens: {metadata.prompt_token_count}")
-            print(f"Output Tokens: {metadata.candidates_token_count}")
-            print(f"\nTotal Tokens: {metadata.total_token_count}")
-            print(f"-------------------------------------\n")
-
-        max_iterations = 10 # Límite de seguridad para que no investigue infinitamente
+        max_iterations = 10 
         iterations = 0
 
-        # 3. Handle Tool Calls
         while response.function_calls and iterations < max_iterations:
             function_call = response.function_calls[0]
             action_name = function_call.name
@@ -87,42 +79,26 @@ class AgentOrchestrator:
             if action_name in self.action_mapping:
                 action_result = self.action_mapping[action_name](**action_args)
                 
-                # 1. Guardamos la petición de la herramienta (mantiene el thought_signature)
                 chat_contents.append(response.candidates[0].content)
-                
-                # 2. Guardamos la respuesta de nuestra función con los datos
                 chat_contents.append(
                     types.Content(role="user", parts=[types.Part.from_function_response(name=action_name, response={"result": action_result})])
                 )
                 
-                # 3. La IA vuelve a pensar con el historial actualizado
-                response = self.ai_client.models.generate_content(
-                    model=self.text_model,
-                    contents=chat_contents,
-                    config=config
-                )
+                response = self.ai_service.generate_text_response(chat_contents, config)
             
             iterations += 1
 
-        # Extracción segura de texto (Salvavidas)
         try:
             final_text = response.text
             if not final_text:
                 final_text = "Lo siento, tuve un problema interno al generar la respuesta."
         except ValueError:
-            # El SDK de Gemini lanza ValueError si el modelo fue filtrado o no devuelve texto
             final_text = "Lo siento, no pude formular una respuesta con esa información."
 
         print(f"📝 [Agent] RAW AI Text: {final_text}")
         
-        # ==========================================
-        # 4. INTELLIGENT ROUTING LOGIC
-        # ==========================================
-        
-        # Default behavior: mirror the input format
         wants_audio_output = is_audio 
         
-        # Búsqueda flexible de etiquetas por si la IA agrega símbolos Markdown
         if "[AUDIO]" in final_text:
             wants_audio_output = True
             final_text = final_text.replace("[AUDIO]", "").strip()
@@ -133,19 +109,18 @@ class AgentOrchestrator:
             final_text = final_text.replace("[TEXT]", "").strip()
             print("🔀 [Agent] Override triggered: AI chose TEXT output.")
 
-        # Salvavidas Anti-Errores de Meta: Evitar un text['body'] vacío
         if not final_text:
             final_text = "Aquí tienes la información solicitada."
 
         print(f"🧠 [Agent] Final Output Format: {'AUDIO' if wants_audio_output else 'TEXT'}")
 
-        # 5. Process Output Route
         if wants_audio_output:
             try:
-                pcm_data = self.speech_service.text_to_audio(final_text)
+
+                pcm_data = self.ai_service.text_to_audio(final_text)
                 if pcm_data:
-                    wav_bytes = self.speech_service.create_wav_header(len(pcm_data)) + pcm_data
-                    opus_bytes = self.speech_service.wav_to_opus(wav_bytes)
+                    wav_bytes = self.ai_service.create_wav_header(len(pcm_data)) + pcm_data
+                    opus_bytes = self.ai_service.wav_to_opus(wav_bytes)
                     return {"type": "audio", "data": opus_bytes}
                 raise Exception("TTS returned empty bytes")
             except Exception as e:

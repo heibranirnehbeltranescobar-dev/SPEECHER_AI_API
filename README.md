@@ -6,6 +6,7 @@
 ![Google Gemini](https://img.shields.io/badge/Google%20Gemini-8E75B2?style=for-the-badge&logo=google&logoColor=white)
 ![WhatsApp API](https://img.shields.io/badge/WhatsApp%20API-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)
 ![FFmpeg](https://img.shields.io/badge/FFmpeg-007800?style=for-the-badge&logo=ffmpeg&logoColor=white)
+![Pinecone](https://img.shields.io/badge/Pinecone-000000?style=for-the-badge&logo=pinecone&logoColor=white)
 ![ngrok](https://img.shields.io/badge/ngrok-1F1E37?style=for-the-badge&logo=ngrok&logoColor=white)
 
 ## 📋 Project Overview
@@ -21,6 +22,8 @@
 - **Native AI Voice Generation (TTS)**: Converts AI text responses into high-fidelity audio streams using Gemini’s multimodal capabilities.
 - **In-Memory Audio Processing**: Utilizes **FFmpeg** to normalize incoming audio (16kHz mono) and encode outgoing responses to `.ogg` (Opus) for native WhatsApp compatibility without disk latency.
 - **Intent Analysis**: Uses AI to determine if the user is implicitly or explicitly asking for a voice response, adapting the output format dynamically.
+- **RAG via Vector Database**: Integrated with **Pinecone** and local `SentenceTransformers` (`all-MiniLM-L6-v2`) to provide the AI with long-term memory and access to institutional knowledge bases without hallucinating.
+- **Dynamic Output Formatting**: The orchestrator uses AI to determine if the user is implicitly or explicitly asking for a voice response or a text format (e.g., code snippets), adapting the output dynamically.
 
 ## 🛠️ Technology Stack
 
@@ -31,6 +34,8 @@
 | **AI SDK**           | `google-genai`            |
 | **Tunneling**        | `ngrok`                   |
 | **Audio Processing** | `FFmpeg` (via Subprocess) |
+| **Vector Database** | Pinecone (`pinecone` SDK)  |
+| **Local Embeddings** | `sentence-transformers`   |
 | **Documentation**    | Swagger UI / ReDoc        |
 
 ## 🏗️ Project Architecture
@@ -94,7 +99,7 @@ llm keys set gemini # Enter your Google AI Studio API Key when prompted
 To scan the core application logic (e.g., endpoints, webhook handlers, and AI integrations) and generate a structured Markdown file containing the project's rules, run the following pipeline in your terminal:
 
 ```bash
-files-to-prompt app/ main.py | llm -m gemini-1.5-pro "Act as a software architect. I have passed you the source code of my project. Analyze it and generate modular documentation files (AI 'Skills' style). Create a separate Markdown block for each major flow (e.g., how to create new endpoints, how the virtual assistant logic is structured, and how external connections are handled). Document the project rules strictly based on the code you are reading. The resulting documentation must be in English."
+files-to-prompt app/ | llm -m gemini-1.5-pro "Act as a software architect. I have passed you the source code of my project. Analyze it and generate modular documentation files (AI 'Skills' style). Create a separate Markdown block for each major flow (e.g., how to create new endpoints, how the virtual assistant logic is structured, and how external connections are handled). Document the project rules strictly based on the code you are reading. The resulting documentation must be in English."
 ```
 
 This command packages the source code, sends it to Gemini, and generates de markdown on the console.
@@ -113,6 +118,10 @@ GEMINI_TEXT_MODEL_AI=text_model_ai
 META_ACCESS_TOKEN=your_temporary_or_permanent_access_token
 META_PHONE_NUMBER_ID=your_phone_number_id
 META_WEBHOOK_VERIFY_TOKEN=your_custom_secure_password
+
+" Pinecone Configuration
+PINECONE_API_KEY=your_api_key
+PINECONE_INDEX_NAME=your_index_name
 ```
 
 ### Running the Project
